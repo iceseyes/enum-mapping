@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+    "enum-mapping-macro",
+    "enum-mapping-usage"
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
