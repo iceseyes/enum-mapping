@@ -1,3 +1,5 @@
+extern crate core;
+
 mod derive;
 mod enum_descriptor;
 
