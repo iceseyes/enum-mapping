@@ -65,8 +65,6 @@ impl ToTokens for EnumDescriptor {
         let name = self.name.clone();
         let arms = self.pairs.iter().map(|(i, v, unnamed, named)| {
             let args = if *unnamed > 0 {
-                //let args = vec![Expr::new("Default::default()", Span::call_site()); *unnamed];
-                //quote! { #(#args,)* }
                 let args = std::iter::repeat(quote!(Default::default())).take(*unnamed);
                 quote! { (#(#args),*) }
             } else if named.len() > 0 {
@@ -78,7 +76,18 @@ impl ToTokens for EnumDescriptor {
             quote!(#i => Self::#v #args)
         });
 
-        quote!(
+        let inv_arms = self.pairs.iter().map(|(i, v, unnamed, named)| {
+            let args = if *unnamed > 0 {
+                quote! { ( .. ) }
+            } else if named.len() > 0 {
+                quote! { { .. } }
+            } else {
+                quote! {}
+            };
+            quote!(#name::#v #args => #i)
+        });
+
+        let from_u8 = quote!(
             impl From<u8> for #name {
                 fn from(value: u8) -> Self {
                     match value {
@@ -87,6 +96,21 @@ impl ToTokens for EnumDescriptor {
                     }
                 }
             }
+        );
+
+        let from_enum = quote!(
+            impl From<#name> for u8 {
+                fn from(value: #name) -> Self {
+                    match value {
+                        #(#inv_arms,)*
+                    }
+                }
+            }
+        );
+
+        quote!(
+            #from_enum
+            #from_u8
         )
             .to_tokens(tokens)
     }

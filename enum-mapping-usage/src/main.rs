@@ -25,6 +25,18 @@ mod tests {
         assert!(matches!(5u8.into(), E1::C(..)));
         assert!(matches!(0u8.into(), E1::A));
         assert!(matches!(1u8.into(), E1::B(_)));
+
+        assert!(matches!(E1::A.into(), 0));
+        assert!(matches!(E1::B(String::new()).into(), 1u8));
+        assert!(matches!(E1::C(32, String::new()).into(), 5u8));
+        assert!(matches!(
+            E1::D {
+                f1: "".to_string(),
+                f2: 0
+            }
+            .into(),
+            6u8
+        ));
     }
 
     #[test]
