@@ -46,7 +46,7 @@ where
             #from_enum
             #from_u8
         )
-            .to_tokens(tokens)
+        .to_tokens(tokens)
     }
 }
 
@@ -88,7 +88,7 @@ where
                 }
             }
         )
-            .to_tokens(tokens)
+        .to_tokens(tokens)
     }
 }
 
@@ -133,7 +133,7 @@ where
                 }
             }
         )
-            .to_tokens(tokens)
+        .to_tokens(tokens)
     }
 }
 
