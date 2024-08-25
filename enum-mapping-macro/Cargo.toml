@@ -1,7 +1,14 @@
 [package]
 name = "enum-mapping-macro"
-version = "0.1.0"
+description = "Maps enum variants to numbers and viceversa"
+license = "BSD-2-Clause"
+homepage = "https://github.com/iceseyes/enum-mapping"
+repository = "https://github.com/iceseyes/enum-mapping"
+readme = "../Readme.md"
+keywords = ["macro", "enum", "mapping", "from", "try_from"]
+categories = ["development-tools"]
 edition = "2021"
+version = "0.1.0"
 
 [dependencies]
 proc-macro2 = "1.0.86"
