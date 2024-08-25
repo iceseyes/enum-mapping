@@ -80,7 +80,3 @@ fn decode_next(buf: &[u8]) -> MessageKind {
 
 In this case, if no specific variant matches the provided value, the `None` variant is returned.
 
----
-
-This version of the README provides a clearer explanation of your macro, its functionality, and how to use it
-effectively in Rust.
