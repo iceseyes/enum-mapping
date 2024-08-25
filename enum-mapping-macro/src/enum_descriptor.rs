@@ -17,7 +17,7 @@ pub struct EnumDescriptor<Number> {
 
 impl<Number> Parse for EnumDescriptor<Number>
 where
-    Number: AddAssign + FromStr + From<u8> + Copy + ToTokens,
+    Number: AddAssign + FromStr + From<u8> + PartialOrd<u8> + Copy + ToTokens,
     <Number as FromStr>::Err: Display,
 {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -36,7 +36,7 @@ where
 
 impl<Number> ToTokens for EnumDescriptor<Number>
 where
-    Number: ToTokens + Clone + AddAssign + From<u8> + Copy + ToTokens + FromStr,
+    Number: ToTokens + Clone + AddAssign + From<u8> + PartialOrd<u8> + Copy + ToTokens + FromStr,
     <Number as FromStr>::Err: Display,
 {
     fn to_tokens(&self, tokens: &mut TokenStream) {
@@ -47,7 +47,7 @@ where
             #from_enum
             #from_u8
         )
-        .to_tokens(tokens)
+            .to_tokens(tokens)
     }
 }
 
@@ -62,7 +62,7 @@ impl<'a, N> FromEnum<'a, N> {
 
 impl<'a, Number> ToTokens for FromEnum<'a, Number>
 where
-    Number: ToTokens + Clone + AddAssign + From<u8> + Copy + ToTokens + FromStr,
+    Number: ToTokens + Clone + AddAssign + From<u8> + PartialOrd<u8> + Copy + ToTokens + FromStr,
     <Number as FromStr>::Err: Display,
 {
     fn to_tokens(&self, tokens: &mut TokenStream) {
@@ -83,7 +83,7 @@ where
                 }
             }
         )
-        .to_tokens(tokens)
+            .to_tokens(tokens)
     }
 }
 
@@ -98,7 +98,7 @@ impl<'a, N> FromNumber<'a, N> {
 
 impl<'a, Number> ToTokens for FromNumber<'a, Number>
 where
-    Number: ToTokens + Clone + AddAssign + From<u8> + Copy + ToTokens + FromStr,
+    Number: ToTokens + Clone + AddAssign + From<u8> + PartialOrd<u8> + Copy + ToTokens + FromStr,
     <Number as FromStr>::Err: Display,
 {
     fn to_tokens(&self, tokens: &mut TokenStream) {
@@ -141,7 +141,7 @@ where
                 )
             }
         }
-        .to_tokens(tokens)
+            .to_tokens(tokens)
     }
 }
 
@@ -156,7 +156,7 @@ struct VariantDescriptor<Number> {
 
 impl<Number> VariantDescriptor<Number>
 where
-    Number: AddAssign + FromStr + From<u8> + Copy + ToTokens,
+    Number: AddAssign + FromStr + From<u8> + Copy + ToTokens + PartialOrd<u8>,
     <Number as FromStr>::Err: Display,
 {
     fn new(e: DataEnum) -> Vec<Self> {
@@ -182,7 +182,7 @@ where
                 }
 
                 let i = index;
-                if index < 0xff {
+                if index < 0xffu8 {
                     index += Number::from(1u8);
                 }
 
