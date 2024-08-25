@@ -1,5 +1,3 @@
-#![doc = include_str!("../../Readme.md")]
-
 extern crate core;
 
 mod derive;
