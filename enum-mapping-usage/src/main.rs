@@ -11,6 +11,22 @@ mod tests {
         A,
         B(String),
         C(u32, String) = 5,
+
+        #[catch_all]
+        D {
+            f1: String,
+            f2: u32,
+        },
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, U8Mapped)]
+    #[repr(u8)]
+    enum E2 {
+        A,
+        B(String),
+        C(u32, String) = 5,
+
         D { f1: String, f2: u32 },
     }
 
@@ -42,6 +58,12 @@ mod tests {
     #[test]
     #[should_panic]
     fn u8_mixed_invalid() {
-        let _t: E1 = 7u8.into();
+        let _t: E2 = 7u8.try_into().unwrap();
+    }
+
+    #[test]
+    fn compile_fails() {
+        let t = trybuild::TestCases::new();
+        t.compile_fail("../tests/fails/*.rs");
     }
 }

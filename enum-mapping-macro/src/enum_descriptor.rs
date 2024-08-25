@@ -6,7 +6,7 @@ use std::ops::AddAssign;
 use std::str::FromStr;
 use syn::{
     parse::{Parse, ParseStream},
-    DataEnum, Expr, Fields, Lit, {Data, DeriveInput},
+    DataEnum, Expr, Fields, Lit, Meta, Path, {Data, DeriveInput},
 };
 
 #[derive(Debug)]
@@ -17,7 +17,7 @@ pub struct EnumDescriptor<Number> {
 
 impl<Number> Parse for EnumDescriptor<Number>
 where
-    Number: AddAssign + FromStr + From<u8> + Copy,
+    Number: AddAssign + FromStr + From<u8> + Copy + ToTokens,
     <Number as FromStr>::Err: Display,
 {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -36,7 +36,8 @@ where
 
 impl<Number> ToTokens for EnumDescriptor<Number>
 where
-    Number: ToTokens + Clone,
+    Number: ToTokens + Clone + AddAssign + From<u8> + Copy + ToTokens + FromStr,
+    <Number as FromStr>::Err: Display,
 {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let from_enum = FromEnum::<Number>(self);
@@ -46,7 +47,7 @@ where
             #from_enum
             #from_u8
         )
-        .to_tokens(tokens)
+            .to_tokens(tokens)
     }
 }
 
@@ -88,7 +89,7 @@ where
                 }
             }
         )
-        .to_tokens(tokens)
+            .to_tokens(tokens)
     }
 }
 
@@ -103,37 +104,50 @@ impl<'a, N> FromNumber<'a, N> {
 
 impl<'a, Number> ToTokens for FromNumber<'a, Number>
 where
-    Number: ToTokens + Clone,
+    Number: ToTokens + Clone + AddAssign + From<u8> + Copy + ToTokens + FromStr,
+    <Number as FromStr>::Err: Display,
 {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = self.0.name.clone();
         let number = self.inner_type_name();
-        let arms = self.0.pairs.iter().map(|vd| {
-            let i = vd.id.clone();
-            let v = vd.name.clone();
-            let args = if vd.unnamed > 0 {
-                let args = std::iter::repeat(quote!(Default::default())).take(vd.unnamed);
-                quote! { (#(#args),*) }
-            } else if vd.fields.len() > 0 {
-                let init = vd.fields.iter().map(|f| quote! { #f: Default::default() });
-                quote! { { #(#init),* } }
-            } else {
-                quote! {}
-            };
-            quote!(#i => Self::#v #args)
-        });
+        let catch_all = self.0.pairs.iter().find(|vd| vd.catch_all);
 
-        quote!(
-            impl From<#number> for #name {
-                fn from(value: #number) -> Self {
-                    match value {
-                        #(#arms,)*
-                        _ => panic!("undefined")
+        match catch_all {
+            Some(catch_all) => {
+                let arms = self.0.pairs.iter().map(|vd| vd.make_match_arm(None));
+                let catch_all_value = catch_all.make_value();
+                quote!(
+                    impl From<#number> for #name {
+                        fn from(value: #number) -> Self {
+                            match value {
+                                #(#arms,)*
+                                _ => #catch_all_value
+                            }
+                        }
                     }
-                }
+                )
             }
-        )
-        .to_tokens(tokens)
+            None => {
+                let arms = self
+                    .0
+                    .pairs
+                    .iter()
+                    .map(|vd| vd.make_match_arm(Some(Ident::new("Ok", Span::call_site()))));
+
+                quote!(
+                    impl TryFrom<#number> for #name {
+                        type Error = ();
+                        fn try_from(value: #number) -> Result<Self, Self::Error> {
+                            match value {
+                                #(#arms,)*
+                                _ => Err(())
+                            }
+                        }
+                    }
+                )
+            }
+        }
+            .to_tokens(tokens)
     }
 }
 
@@ -143,11 +157,12 @@ struct VariantDescriptor<Number> {
     name: Ident,
     unnamed: usize,
     fields: Vec<Ident>,
+    catch_all: bool,
 }
 
 impl<Number> VariantDescriptor<Number>
 where
-    Number: AddAssign + FromStr + From<u8> + Copy,
+    Number: AddAssign + FromStr + From<u8> + Copy + ToTokens,
     <Number as FromStr>::Err: Display,
 {
     fn new(e: DataEnum) -> Vec<Self> {
@@ -155,6 +170,17 @@ where
         e.variants
             .iter()
             .map(|v| {
+                let catch_all = v.attrs.iter().fold(false, |prev, a| {
+                    prev || if let Meta::Path(Path { segments, .. }) = &(a.meta) {
+                        segments
+                            .iter()
+                            .find(|&path| path.ident.to_string() == "catch_all")
+                            .is_some()
+                    } else {
+                        false
+                    }
+                });
+
                 if let Some((_, Expr::Lit(e))) = &v.discriminant {
                     if let Lit::Int(value) = &e.lit {
                         let r = value.base10_parse::<Number>();
@@ -187,8 +213,37 @@ where
                     name: v.ident.clone(),
                     unnamed,
                     fields: named,
+                    catch_all,
                 }
             })
             .collect()
+    }
+
+    fn make_value(&self) -> TokenStream {
+        let v = self.name.clone();
+        let args = if self.unnamed > 0 {
+            let args = std::iter::repeat(quote!(Default::default())).take(self.unnamed);
+            quote! { (#(#args),*) }
+        } else if self.fields.len() > 0 {
+            let init = self
+                .fields
+                .iter()
+                .map(|f| quote! { #f: Default::default() });
+            quote! { { #(#init),* } }
+        } else {
+            quote! {}
+        };
+
+        quote!(Self::#v #args)
+    }
+
+    fn make_match_arm(&self, variant: Option<Ident>) -> TokenStream {
+        let i = self.id.clone();
+        let v = self.make_value();
+        if let Some(name) = variant {
+            quote!(#i => #name(#v))
+        } else {
+            quote!(#i => #v)
+        }
     }
 }

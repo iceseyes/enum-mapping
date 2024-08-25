@@ -5,3 +5,6 @@ edition = "2021"
 
 [dependencies]
 enum-mapping-macro = { path = "../enum-mapping-macro" }
+
+[dev-dependencies]
+trybuild = "1.0.99"
