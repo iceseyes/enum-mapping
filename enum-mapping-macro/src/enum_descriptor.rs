@@ -1,12 +1,12 @@
-use proc_macro2::{Ident, Span, TokenStream};
-use quote::{quote, ToTokens};
+use proc_macro2::{Ident, TokenStream};
+use quote::{format_ident, quote, ToTokens};
 use std::any::type_name;
 use std::fmt::Display;
 use std::ops::AddAssign;
 use std::str::FromStr;
 use syn::{
     parse::{Parse, ParseStream},
-    DataEnum, Expr, Fields, Lit, Meta, Path, {Data, DeriveInput},
+    DataEnum, Expr, Fields, Lit, {Data, DeriveInput},
 };
 
 #[derive(Debug)]
@@ -47,7 +47,7 @@ where
             #from_enum
             #from_u8
         )
-            .to_tokens(tokens)
+        .to_tokens(tokens)
     }
 }
 
@@ -56,29 +56,23 @@ struct FromEnum<'a, Number>(&'a EnumDescriptor<Number>);
 
 impl<'a, N> FromEnum<'a, N> {
     fn inner_type_name(&self) -> Ident {
-        Ident::new(type_name::<N>(), Span::call_site())
+        format_ident!("{}", type_name::<N>())
     }
 }
 
 impl<'a, Number> ToTokens for FromEnum<'a, Number>
 where
-    Number: ToTokens + Clone,
+    Number: ToTokens + Clone + AddAssign + From<u8> + Copy + ToTokens + FromStr,
+    <Number as FromStr>::Err: Display,
 {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = &self.0.name.clone();
         let number = self.inner_type_name();
-        let inv_arms = self.0.pairs.iter().map(|vd| {
-            let i = vd.id.clone();
-            let v = vd.name.clone();
-            let args = if vd.unnamed > 0 {
-                quote! { ( .. ) }
-            } else if vd.fields.len() > 0 {
-                quote! { { .. } }
-            } else {
-                quote! {}
-            };
-            quote!(#name::#v #args => #i)
-        });
+        let inv_arms = self
+            .0
+            .pairs
+            .iter()
+            .map(|vd| vd.make_match_arm_condition(name));
 
         quote!(
             impl From<#name> for #number {
@@ -89,7 +83,7 @@ where
                 }
             }
         )
-            .to_tokens(tokens)
+        .to_tokens(tokens)
     }
 }
 
@@ -98,7 +92,7 @@ struct FromNumber<'a, Number>(&'a EnumDescriptor<Number>);
 
 impl<'a, N> FromNumber<'a, N> {
     fn inner_type_name(&self) -> Ident {
-        Ident::new(type_name::<N>(), Span::call_site())
+        format_ident!("{}", type_name::<N>())
     }
 }
 
@@ -132,7 +126,7 @@ where
                     .0
                     .pairs
                     .iter()
-                    .map(|vd| vd.make_match_arm(Some(Ident::new("Ok", Span::call_site()))));
+                    .map(|vd| vd.make_match_arm(Some(format_ident!("Ok"))));
 
                 quote!(
                     impl TryFrom<#number> for #name {
@@ -147,7 +141,7 @@ where
                 )
             }
         }
-            .to_tokens(tokens)
+        .to_tokens(tokens)
     }
 }
 
@@ -170,16 +164,11 @@ where
         e.variants
             .iter()
             .map(|v| {
-                let catch_all = v.attrs.iter().fold(false, |prev, a| {
-                    prev || if let Meta::Path(Path { segments, .. }) = &(a.meta) {
-                        segments
-                            .iter()
-                            .find(|&path| path.ident.to_string() == "catch_all")
-                            .is_some()
-                    } else {
-                        false
-                    }
-                });
+                let catch_all = v
+                    .attrs
+                    .iter()
+                    .find(|a| a.path().is_ident("catch_all"))
+                    .is_some();
 
                 if let Some((_, Expr::Lit(e))) = &v.discriminant {
                     if let Lit::Int(value) = &e.lit {
@@ -187,13 +176,15 @@ where
                         if r.is_ok() {
                             index = r.unwrap();
                         } else {
-                            panic!("value {} out of range for u8", value);
+                            unimplemented!("value {} out of range for u8", value);
                         }
                     }
                 }
 
                 let i = index;
-                index += Number::from(1u8);
+                if index < 0xff {
+                    index += Number::from(1u8);
+                }
 
                 let (unnamed, named) = match &v.fields {
                     Fields::Named(fields) => (
@@ -245,5 +236,18 @@ where
         } else {
             quote!(#i => #v)
         }
+    }
+
+    fn make_match_arm_condition(&self, name: &Ident) -> TokenStream {
+        let i = self.id.clone();
+        let v = self.name.clone();
+        let args = if self.unnamed > 0 {
+            quote! { ( .. ) }
+        } else if self.fields.len() > 0 {
+            quote! { { .. } }
+        } else {
+            quote! {}
+        };
+        quote!(#name::#v #args => #i)
     }
 }
